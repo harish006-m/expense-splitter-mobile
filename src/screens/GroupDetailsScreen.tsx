@@ -15,7 +15,6 @@ import {
 import {
   getGroup,
   getBalances,
-  deleteMember,
 } from '../services/api';
 
 import {COLORS} from '../theme/colors';
@@ -34,12 +33,20 @@ export default function GroupDetailsScreen({
   const [balances, setBalances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  /* =========================
+     ADD MEMBER
+  ========================= */
+
   const [showAddMember, setShowAddMember] =
     useState(false);
 
   const [memberName, setMemberName] = useState('');
   const [addingMember, setAddingMember] =
     useState(false);
+
+  /* =========================
+     MEMBER MENU
+  ========================= */
 
   const [selectedMember, setSelectedMember] =
     useState<any>(null);
@@ -50,11 +57,61 @@ export default function GroupDetailsScreen({
   const [removingMemberId, setRemovingMemberId] =
     useState<number | null>(null);
 
+  /* =========================
+     EDIT MEMBER
+  ========================= */
+
+  const [showEditMember, setShowEditMember] =
+    useState(false);
+
+  const [editMemberName, setEditMemberName] =
+    useState('');
+
+  const [updatingMember, setUpdatingMember] =
+    useState(false);
+
+  /* =========================
+     EXPENSE MENU
+  ========================= */
+
+  const [selectedExpense, setSelectedExpense] =
+    useState<any>(null);
+
+  const [showExpenseMenu, setShowExpenseMenu] =
+    useState(false);
+
+  const [removingExpenseId, setRemovingExpenseId] =
+    useState<number | null>(null);
+
+  /* =========================
+     EDIT EXPENSE
+  ========================= */
+
+  const [showEditExpense, setShowEditExpense] =
+    useState(false);
+
+  const [editExpenseDescription, setEditExpenseDescription] =
+    useState('');
+
+  const [editExpenseAmount, setEditExpenseAmount] =
+    useState('');
+
+  const [editExpensePaidBy, setEditExpensePaidBy] =
+    useState<number | null>(null);
+
+  const [updatingExpense, setUpdatingExpense] =
+    useState(false);
+
+  /* =========================
+     LOAD GROUP
+  ========================= */
+
   const loadGroup = async () => {
     try {
       setLoading(true);
 
       const groupData = await getGroup(groupId);
+
       setGroup(groupData);
 
       try {
@@ -63,7 +120,7 @@ export default function GroupDetailsScreen({
         setBalances(
           Array.isArray(balanceData)
             ? balanceData
-            : balanceData.data || [],
+            : balanceData?.data || [],
         );
       } catch (balanceError) {
         console.log(
@@ -88,6 +145,10 @@ export default function GroupDetailsScreen({
   useEffect(() => {
     loadGroup();
   }, [groupId]);
+
+  /* =========================
+     ADD MEMBER
+  ========================= */
 
   const addMember = async () => {
     const name = memberName.trim();
@@ -117,11 +178,15 @@ export default function GroupDetailsScreen({
         },
       );
 
-      const data = await response.json();
+      const data = await response
+        .json()
+        .catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(
-          data.message || `HTTP ${response.status}`,
+          data?.message ||
+            data?.error ||
+            `HTTP ${response.status}`,
         );
       }
 
@@ -142,7 +207,7 @@ export default function GroupDetailsScreen({
 
       Alert.alert(
         'Error',
-        error.message ||
+        error?.message ||
           'Unable to add member.',
       );
     } finally {
@@ -150,10 +215,112 @@ export default function GroupDetailsScreen({
     }
   };
 
+  /* =========================
+     MEMBER MENU
+  ========================= */
+
   const openMemberMenu = (member: any) => {
     setSelectedMember(member);
     setShowMemberMenu(true);
   };
+
+  /* =========================
+     OPEN EDIT MEMBER
+  ========================= */
+
+  const openEditMember = () => {
+    if (!selectedMember) {
+      return;
+    }
+
+    setEditMemberName(
+      selectedMember?.name || '',
+    );
+
+    setShowMemberMenu(false);
+    setShowEditMember(true);
+  };
+
+  /* =========================
+     SAVE MEMBER UPDATE
+  ========================= */
+
+  const saveMemberUpdate = async () => {
+    const name = editMemberName.trim();
+
+    if (!name) {
+      Alert.alert(
+        'Required',
+        'Please enter a member name.',
+      );
+      return;
+    }
+
+    if (!selectedMember?.id) {
+      Alert.alert(
+        'Error',
+        'Member ID is missing.',
+      );
+      return;
+    }
+
+    try {
+      setUpdatingMember(true);
+
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${groupId}/members/${selectedMember.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            name,
+          }),
+        },
+      );
+
+      const data = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `HTTP ${response.status}`,
+        );
+      }
+
+      setShowEditMember(false);
+      setSelectedMember(null);
+
+      await loadGroup();
+
+      Alert.alert(
+        'Success',
+        'Member updated successfully.',
+      );
+    } catch (error: any) {
+      console.log(
+        'UPDATE MEMBER ERROR:',
+        error,
+      );
+
+      Alert.alert(
+        'Error',
+        error?.message ||
+          'Unable to update member.',
+      );
+    } finally {
+      setUpdatingMember(false);
+    }
+  };
+
+  /* =========================
+     CONFIRM REMOVE MEMBER
+  ========================= */
 
   const confirmRemoveMember = () => {
     if (!selectedMember) {
@@ -164,44 +331,59 @@ export default function GroupDetailsScreen({
 
     setShowMemberMenu(false);
 
-    setTimeout(() => {
-      Alert.alert(
-        'Remove Member?',
-        `Are you sure you want to remove ${member.name} from this group?`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: () =>
-              removeMember(member),
-          },
-        ],
+    Alert.alert(
+      'Remove Member?',
+      `Are you sure you want to remove ${member.name} from this group?`,
+      [
         {
-          cancelable: true,
+          text: 'Cancel',
+          style: 'cancel',
         },
-      );
-    }, 200);
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => removeMember(member),
+        },
+      ],
+    );
   };
+
+  /* =========================
+     REMOVE MEMBER
+  ========================= */
 
   const removeMember = async (member: any) => {
     try {
       setRemovingMemberId(member.id);
 
-      await deleteMember(
-        groupId,
-        member.id,
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${groupId}/members/${member.id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Accept: 'application/json',
+          },
+        },
       );
+
+      const data = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `HTTP ${response.status}`,
+        );
+      }
+
+      await loadGroup();
 
       Alert.alert(
         'Member Removed',
         `${member.name} has been removed from the group.`,
       );
-
-      await loadGroup();
     } catch (error: any) {
       console.log(
         'REMOVE MEMBER ERROR:',
@@ -210,7 +392,7 @@ export default function GroupDetailsScreen({
 
       Alert.alert(
         'Error',
-        error.message ||
+        error?.message ||
           'Unable to remove member.',
       );
     } finally {
@@ -218,6 +400,270 @@ export default function GroupDetailsScreen({
       setSelectedMember(null);
     }
   };
+
+  /* =========================
+     EXPENSE MENU
+  ========================= */
+
+  const openExpenseMenu = (expense: any) => {
+    setSelectedExpense(expense);
+    setShowExpenseMenu(true);
+  };
+
+  /* =========================
+     OPEN EDIT EXPENSE
+  ========================= */
+
+  const openEditExpense = () => {
+    if (!selectedExpense) {
+      return;
+    }
+
+    setEditExpenseDescription(
+      selectedExpense?.description ||
+        selectedExpense?.name ||
+        '',
+    );
+
+    setEditExpenseAmount(
+      String(selectedExpense?.amount ?? ''),
+    );
+
+    let paidById: number | null = null;
+
+    if (
+      typeof selectedExpense?.paid_by ===
+      'number'
+    ) {
+      paidById = selectedExpense.paid_by;
+    } else if (
+      typeof selectedExpense?.paid_by_id ===
+      'number'
+    ) {
+      paidById =
+        selectedExpense.paid_by_id;
+    } else if (
+      typeof selectedExpense?.paidById ===
+      'number'
+    ) {
+      paidById =
+        selectedExpense.paidById;
+    } else if (
+      typeof selectedExpense?.paid_by ===
+      'string'
+    ) {
+      const parsed = Number(
+        selectedExpense.paid_by,
+      );
+
+      if (!Number.isNaN(parsed)) {
+        paidById = parsed;
+      }
+    }
+
+    if (!paidById && members.length > 0) {
+      paidById = members[0].id;
+    }
+
+    setEditExpensePaidBy(paidById);
+
+    setShowExpenseMenu(false);
+    setShowEditExpense(true);
+  };
+
+  /* =========================
+     SAVE EXPENSE UPDATE
+  ========================= */
+
+  const saveExpenseUpdate = async () => {
+    const description =
+      editExpenseDescription.trim();
+
+    const amount = Number(
+      editExpenseAmount,
+    );
+
+    if (!description) {
+      Alert.alert(
+        'Required',
+        'Please enter an expense description.',
+      );
+      return;
+    }
+
+    if (
+      !editExpenseAmount.trim() ||
+      Number.isNaN(amount) ||
+      amount <= 0
+    ) {
+      Alert.alert(
+        'Required',
+        'Please enter a valid amount.',
+      );
+      return;
+    }
+
+    if (!editExpensePaidBy) {
+      Alert.alert(
+        'Required',
+        'Please select who paid.',
+      );
+      return;
+    }
+
+    if (!selectedExpense?.id) {
+      Alert.alert(
+        'Error',
+        'Expense ID is missing.',
+      );
+      return;
+    }
+
+    try {
+      setUpdatingExpense(true);
+
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${groupId}/expenses/${selectedExpense.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            paid_by: editExpensePaidBy,
+            description,
+            amount,
+          }),
+        },
+      );
+
+      const data = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `HTTP ${response.status}`,
+        );
+      }
+
+      setShowEditExpense(false);
+      setSelectedExpense(null);
+
+      await loadGroup();
+
+      Alert.alert(
+        'Success',
+        'Expense updated successfully.',
+      );
+    } catch (error: any) {
+      console.log(
+        'UPDATE EXPENSE ERROR:',
+        error,
+      );
+
+      Alert.alert(
+        'Error',
+        error?.message ||
+          'Unable to update expense.',
+      );
+    } finally {
+      setUpdatingExpense(false);
+    }
+  };
+
+  /* =========================
+     CONFIRM DELETE EXPENSE
+  ========================= */
+
+  const confirmRemoveExpense = () => {
+    if (!selectedExpense) {
+      return;
+    }
+
+    const expense = selectedExpense;
+
+    setShowExpenseMenu(false);
+
+    Alert.alert(
+      'Delete Expense?',
+      `Are you sure you want to delete "${expense?.description || expense?.name || 'this expense'}"?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () =>
+            removeExpense(expense),
+        },
+      ],
+    );
+  };
+
+  /* =========================
+     DELETE EXPENSE
+  ========================= */
+
+  const removeExpense = async (
+    expense: any,
+  ) => {
+    try {
+      setRemovingExpenseId(expense.id);
+
+      const response = await fetch(
+        `${API_BASE_URL}/groups/${groupId}/expenses/${expense.id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Accept: 'application/json',
+          },
+        },
+      );
+
+      const data = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `HTTP ${response.status}`,
+        );
+      }
+
+      await loadGroup();
+
+      Alert.alert(
+        'Expense Deleted',
+        'The expense has been removed successfully.',
+      );
+    } catch (error: any) {
+      console.log(
+        'DELETE EXPENSE ERROR:',
+        error,
+      );
+
+      Alert.alert(
+        'Error',
+        error?.message ||
+          'Unable to delete expense.',
+      );
+    } finally {
+      setRemovingExpenseId(null);
+      setSelectedExpense(null);
+    }
+  };
+
+  /* =========================
+     LOADING
+  ========================= */
 
   if (loading) {
     return (
@@ -239,6 +685,10 @@ export default function GroupDetailsScreen({
       </View>
     );
   }
+
+  /* =========================
+     GROUP NOT FOUND
+  ========================= */
 
   if (!group) {
     return (
@@ -271,6 +721,7 @@ export default function GroupDetailsScreen({
         showsVerticalScrollIndicator={false}>
 
         {/* GROUP HEADER */}
+
         <View style={styles.groupHeader}>
           <View style={styles.groupAvatar}>
             <Text style={styles.groupAvatarText}>
@@ -307,6 +758,7 @@ export default function GroupDetailsScreen({
         </View>
 
         {/* SUMMARY */}
+
         <View style={styles.summaryCard}>
           <View>
             <Text style={styles.summaryLabel}>
@@ -330,6 +782,7 @@ export default function GroupDetailsScreen({
         </View>
 
         {/* MEMBERS */}
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View>
@@ -360,6 +813,7 @@ export default function GroupDetailsScreen({
           </View>
 
           {/* ADD MEMBER */}
+
           {showAddMember && (
             <View style={styles.addMemberCard}>
               <Text style={styles.formTitle}>
@@ -408,6 +862,7 @@ export default function GroupDetailsScreen({
           )}
 
           {/* MEMBER LIST */}
+
           {members.length === 0 ? (
             <View style={styles.emptyCard}>
               <View style={styles.emptyIcon}>
@@ -497,6 +952,7 @@ export default function GroupDetailsScreen({
         </View>
 
         {/* EXPENSES */}
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View>
@@ -548,25 +1004,62 @@ export default function GroupDetailsScreen({
                     style={styles.expenseName}
                     numberOfLines={1}>
                     {expense.description ||
-                      expense.name}
+                      expense.name ||
+                      'Expense'}
                   </Text>
 
                   <Text style={styles.paidBy}>
                     Paid by{' '}
-                    {expense.paid_by ||
-                      expense.paidBy}
+                    {expense.paid_by_name ||
+                      expense.paidByName ||
+                      getPaidByName(
+                        expense,
+                        members,
+                      )}
                   </Text>
                 </View>
 
-                <Text style={styles.amount}>
-                  ₹{expense.amount}
-                </Text>
+                <View style={styles.expenseRight}>
+                  <Text style={styles.amount}>
+                    ₹{expense.amount}
+                  </Text>
+
+                  <TouchableOpacity
+                    style={styles.expenseMenuButton}
+                    activeOpacity={0.7}
+                    disabled={
+                      removingExpenseId ===
+                      expense.id
+                    }
+                    onPress={() =>
+                      openExpenseMenu(expense)
+                    }>
+
+                    {removingExpenseId ===
+                    expense.id ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={
+                          COLORS.textSecondary
+                        }
+                      />
+                    ) : (
+                      <Text
+                        style={
+                          styles.expenseMenuDots
+                        }>
+                        ⋮
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             ))
           )}
         </View>
 
         {/* BALANCES */}
+
         {balances.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -661,6 +1154,7 @@ export default function GroupDetailsScreen({
         )}
 
         {/* ACTIONS */}
+
         <View style={styles.actions}>
           <TouchableOpacity
             style={styles.primaryButton}
@@ -734,7 +1228,10 @@ export default function GroupDetailsScreen({
         <View style={styles.bottomSpace} />
       </ScrollView>
 
-      {/* MEMBER MENU */}
+      {/* =========================
+          MEMBER MENU
+      ========================= */}
+
       <Modal
         visible={showMemberMenu}
         transparent
@@ -743,17 +1240,16 @@ export default function GroupDetailsScreen({
           setShowMemberMenu(false)
         }>
 
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() =>
-            setShowMemberMenu(false)
-          }>
-
+        <View style={styles.modalOverlay}>
           <TouchableOpacity
+            style={styles.modalBackgroundButton}
             activeOpacity={1}
-            style={styles.memberMenuCard}>
+            onPress={() =>
+              setShowMemberMenu(false)
+            }
+          />
 
+          <View style={styles.memberMenuCard}>
             <View style={styles.menuHeader}>
               <View
                 style={
@@ -786,6 +1282,31 @@ export default function GroupDetailsScreen({
             </View>
 
             <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.editMenuItem}
+              activeOpacity={0.7}
+              onPress={openEditMember}>
+
+              <View
+                style={
+                  styles.editMenuIcon
+                }>
+                <Text
+                  style={
+                    styles.editMenuIconText
+                  }>
+                  ✎
+                </Text>
+              </View>
+
+              <Text
+                style={
+                  styles.editMenuText
+                }>
+                Edit Member
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.removeMenuItem}
@@ -829,12 +1350,383 @@ export default function GroupDetailsScreen({
                 Cancel
               </Text>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* =========================
+          EDIT MEMBER MODAL
+      ========================= */}
+
+      <Modal
+        visible={showEditMember}
+        transparent
+        animationType="slide"
+        onRequestClose={() =>
+          setShowEditMember(false)
+        }>
+
+        <View style={styles.modalOverlay}>
+          <View style={styles.editModalCard}>
+            <Text style={styles.editModalTitle}>
+              Edit Member
+            </Text>
+
+            <Text style={styles.editModalSubtitle}>
+              Update the member name.
+            </Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Enter member name"
+              placeholderTextColor={
+                COLORS.textMuted
+              }
+              value={editMemberName}
+              onChangeText={setEditMemberName}
+              autoCapitalize="words"
+              autoFocus
+            />
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={
+                  styles.modalCancelButton
+                }
+                onPress={() =>
+                  setShowEditMember(false)
+                }
+                disabled={updatingMember}>
+
+                <Text
+                  style={
+                    styles.modalCancelText
+                  }>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalSaveButton,
+                  updatingMember &&
+                    styles.disabledButton,
+                ]}
+                onPress={saveMemberUpdate}
+                disabled={updatingMember}>
+
+                {updatingMember ? (
+                  <ActivityIndicator
+                    color={COLORS.white}
+                  />
+                ) : (
+                  <Text
+                    style={
+                      styles.modalSaveText
+                    }>
+                    Save
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* =========================
+          EXPENSE MENU
+      ========================= */}
+
+      <Modal
+        visible={showExpenseMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() =>
+          setShowExpenseMenu(false)
+        }>
+
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackgroundButton}
+            activeOpacity={1}
+            onPress={() =>
+              setShowExpenseMenu(false)
+            }
+          />
+
+          <View style={styles.memberMenuCard}>
+            <View style={styles.menuHeader}>
+              <View
+                style={
+                  styles.expenseMenuHeaderIcon
+                }>
+                <Text
+                  style={
+                    styles.expenseIconText
+                  }>
+                  ₹
+                </Text>
+              </View>
+
+              <View style={styles.menuHeaderInfo}>
+                <Text
+                  style={styles.menuMemberName}
+                  numberOfLines={1}>
+                  {selectedExpense?.description ||
+                    selectedExpense?.name ||
+                    'Expense'}
+                </Text>
+
+                <Text
+                  style={
+                    styles.menuMemberSubtitle
+                  }>
+                  ₹{selectedExpense?.amount}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.editMenuItem}
+              activeOpacity={0.7}
+              onPress={openEditExpense}>
+
+              <View
+                style={
+                  styles.editMenuIcon
+                }>
+                <Text
+                  style={
+                    styles.editMenuIconText
+                  }>
+                  ✎
+                </Text>
+              </View>
+
+              <Text
+                style={
+                  styles.editMenuText
+                }>
+                Edit Expense
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.removeMenuItem}
+              activeOpacity={0.7}
+              onPress={
+                confirmRemoveExpense
+              }>
+
+              <View
+                style={
+                  styles.removeMenuIcon
+                }>
+                <Text
+                  style={
+                    styles.removeMenuIconText
+                  }>
+                  −
+                </Text>
+              </View>
+
+              <Text
+                style={
+                  styles.removeMenuText
+                }>
+                Delete Expense
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={
+                styles.cancelMenuButton
+              }
+              activeOpacity={0.7}
+              onPress={() =>
+                setShowExpenseMenu(false)
+              }>
+              <Text
+                style={
+                  styles.cancelMenuText
+                }>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* =========================
+          EDIT EXPENSE MODAL
+      ========================= */}
+
+      <Modal
+        visible={showEditExpense}
+        transparent
+        animationType="slide"
+        onRequestClose={() =>
+          setShowEditExpense(false)
+        }>
+
+        <View style={styles.modalOverlay}>
+          <View style={styles.editModalCard}>
+            <Text style={styles.editModalTitle}>
+              Edit Expense
+            </Text>
+
+            <Text style={styles.editModalSubtitle}>
+              Update expense details.
+            </Text>
+
+            <Text style={styles.formLabel}>
+              Expense Name
+            </Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Example: Dinner"
+              placeholderTextColor={
+                COLORS.textMuted
+              }
+              value={editExpenseDescription}
+              onChangeText={
+                setEditExpenseDescription
+              }
+            />
+
+            <Text style={styles.formLabel}>
+              Amount
+            </Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Example: 900"
+              placeholderTextColor={
+                COLORS.textMuted
+              }
+              value={editExpenseAmount}
+              onChangeText={
+                setEditExpenseAmount
+              }
+              keyboardType="decimal-pad"
+            />
+
+            <Text style={styles.formLabel}>
+              Paid By
+            </Text>
+
+            <ScrollView
+              style={styles.paidByList}
+              showsVerticalScrollIndicator={false}>
+
+              {members.map((member: any) => (
+                <TouchableOpacity
+                  key={member.id}
+                  style={[
+                    styles.paidByButton,
+                    editExpensePaidBy ===
+                      member.id &&
+                      styles.paidByButtonSelected,
+                  ]}
+                  onPress={() =>
+                    setEditExpensePaidBy(
+                      member.id,
+                    )
+                  }>
+
+                  <Text
+                    style={[
+                      styles.paidByButtonText,
+                      editExpensePaidBy ===
+                        member.id &&
+                        styles.paidByButtonTextSelected,
+                    ]}>
+                    {member.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={
+                  styles.modalCancelButton
+                }
+                onPress={() =>
+                  setShowEditExpense(false)
+                }
+                disabled={updatingExpense}>
+
+                <Text
+                  style={
+                    styles.modalCancelText
+                  }>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalSaveButton,
+                  updatingExpense &&
+                    styles.disabledButton,
+                ]}
+                onPress={saveExpenseUpdate}
+                disabled={updatingExpense}>
+
+                {updatingExpense ? (
+                  <ActivityIndicator
+                    color={COLORS.white}
+                  />
+                ) : (
+                  <Text
+                    style={
+                      styles.modalSaveText
+                    }>
+                    Save
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );
 }
+
+/* =========================================================
+   HELPER
+========================================================= */
+
+function getPaidByName(
+  expense: any,
+  members: any[],
+) {
+  const paidBy =
+    expense?.paid_by ??
+    expense?.paidBy ??
+    expense?.paid_by_id ??
+    expense?.paidById;
+
+  const member = members.find(
+    item =>
+      String(item.id) ===
+      String(paidBy),
+  );
+
+  return (
+    member?.name ||
+    (paidBy ? String(paidBy) : 'Unknown')
+  );
+}
+
+/* =========================================================
+   STYLES
+========================================================= */
 
 const styles = StyleSheet.create({
   screen: {
@@ -1071,6 +1963,13 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
 
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 7,
+  },
+
   input: {
     backgroundColor: COLORS.inputBackground,
     borderWidth: 1,
@@ -1167,143 +2066,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: COLORS.overlayDark,
-    justifyContent: 'flex-end',
-  },
-
-  memberMenuCard: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 20,
-    paddingBottom: 30,
-  },
-
-  menuHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-
-  menuHeaderAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    backgroundColor: COLORS.primarySoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  menuHeaderAvatarText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.primary,
-  },
-
-  menuHeaderInfo: {
-    marginLeft: 12,
-  },
-
-  menuMemberName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-
-  menuMemberSubtitle: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textMuted,
-    marginTop: 3,
-  },
-
-  menuDivider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 16,
-  },
-
-  removeMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 13,
-    borderRadius: 13,
-  },
-
-  removeMenuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.errorSoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  removeMenuIconText: {
-    fontSize: 25,
-    fontWeight: '500',
-    color: COLORS.error,
-  },
-
-  removeMenuText: {
-    marginLeft: 12,
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.error,
-  },
-
-  cancelMenuButton: {
-    marginTop: 8,
-    paddingVertical: 14,
-    borderRadius: 13,
-    backgroundColor: COLORS.graySoft,
-    alignItems: 'center',
-  },
-
-  cancelMenuText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textDark,
-  },
-
-  emptyCard: {
-    backgroundColor: COLORS.white,
-    padding: 25,
-    borderRadius: 18,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-
-  emptyIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 17,
-    backgroundColor: COLORS.avatarPurple,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 11,
-  },
-
-  emptyIconText: {
-    fontSize: 22,
-  },
-
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-
-  emptyText: {
-    color: COLORS.textMuted,
-    fontSize: TYPOGRAPHY.xs,
-    textAlign: 'center',
-    marginTop: 5,
-    lineHeight: 18,
-  },
-
   expenseCard: {
     backgroundColor: COLORS.white,
     padding: 13,
@@ -1333,7 +2095,7 @@ const styles = StyleSheet.create({
   expenseInfo: {
     flex: 1,
     marginLeft: 13,
-    marginRight: 10,
+    marginRight: 8,
   },
 
   expenseName: {
@@ -1348,10 +2110,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  expenseRight: {
+    alignItems: 'flex-end',
+  },
+
   amount: {
     fontSize: 17,
     fontWeight: '800',
     color: COLORS.text,
+  },
+
+  expenseMenuButton: {
+    width: 30,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: COLORS.graySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+
+  expenseMenuDots: {
+    fontSize: 20,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: COLORS.textSecondary,
   },
 
   balanceCard: {
@@ -1504,5 +2287,276 @@ const styles = StyleSheet.create({
 
   bottomSpace: {
     height: 30,
+  },
+
+  /* =========================
+     MODALS
+  ========================= */
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: COLORS.overlayDark,
+    justifyContent: 'flex-end',
+  },
+
+  modalBackgroundButton: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  memberMenuCard: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    padding: 20,
+    paddingBottom: 30,
+  },
+
+  menuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+
+  menuHeaderAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: COLORS.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  menuHeaderAvatarText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+
+  expenseMenuHeaderIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: COLORS.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  menuHeaderInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+
+  menuMemberName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+
+  menuMemberSubtitle: {
+    fontSize: TYPOGRAPHY.xs,
+    color: COLORS.textMuted,
+    marginTop: 3,
+  },
+
+  menuDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 16,
+  },
+
+  editMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 13,
+    borderRadius: 13,
+  },
+
+  editMenuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  editMenuIconText: {
+    fontSize: 20,
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+
+  editMenuText: {
+    marginLeft: 12,
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+
+  removeMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 13,
+    borderRadius: 13,
+  },
+
+  removeMenuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.errorSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  removeMenuIconText: {
+    fontSize: 25,
+    fontWeight: '500',
+    color: COLORS.error,
+  },
+
+  removeMenuText: {
+    marginLeft: 12,
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.error,
+  },
+
+  cancelMenuButton: {
+    marginTop: 8,
+    paddingVertical: 14,
+    borderRadius: 13,
+    backgroundColor: COLORS.graySoft,
+    alignItems: 'center',
+  },
+
+  cancelMenuText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+
+  editModalCard: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    padding: 20,
+    paddingBottom: 30,
+    maxHeight: '90%',
+  },
+
+  editModalTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+
+  editModalSubtitle: {
+    fontSize: TYPOGRAPHY.sm,
+    color: COLORS.textMuted,
+    marginTop: 4,
+    marginBottom: 18,
+  },
+
+  modalButtonRow: {
+    flexDirection: 'row',
+    marginTop: 5,
+  },
+
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 13,
+    backgroundColor: COLORS.graySoft,
+    alignItems: 'center',
+    marginRight: 5,
+  },
+
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+
+  modalSaveButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 13,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    marginLeft: 5,
+  },
+
+  modalSaveText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+
+  paidByList: {
+    maxHeight: 150,
+    marginBottom: 12,
+  },
+
+  paidByButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.inputBorder,
+    backgroundColor: COLORS.inputBackground,
+    marginBottom: 7,
+  },
+
+  paidByButtonSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+
+  paidByButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+
+  paidByButtonTextSelected: {
+    color: COLORS.white,
+  },
+
+  emptyCard: {
+    backgroundColor: COLORS.white,
+    padding: 25,
+    borderRadius: 18,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+  },
+
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    backgroundColor: COLORS.avatarPurple,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 11,
+  },
+
+  emptyIconText: {
+    fontSize: 22,
+  },
+
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+
+  emptyText: {
+    color: COLORS.textMuted,
+    fontSize: TYPOGRAPHY.xs,
+    textAlign: 'center',
+    marginTop: 5,
+    lineHeight: 18,
   },
 });
